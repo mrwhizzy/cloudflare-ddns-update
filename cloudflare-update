@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Based on benkulbertis/cloudflare-update-record.sh
+auth_email="your-email@example.com"            	   # The email used to login 'https://dash.cloudflare.com'
+auth_key="0000000000000000000000000000000000000"   # Top right corner, "My profile" > "Global API Key"
+zone_identifier="00000000000000000000000000000000" # Can be found in the "Overview" tab of your domain
+sleep_seconds=300				                           # Run every 5 minutes
+records=("domain.com" "www.domain.com" "sub1.domain.com" "sub2.domain.com" "sub3.domain.com" "sub4.domain.com" "unproxied.domain.com")
+not_proxied="unproxied.domain.com"
+
+while true
+do
+  for record_name in "${records[@]}"
+  do
+    # DO NOT CHANGE LINES BELOW
+    ip=$(curl -s https://ipv4.icanhazip.com/)
+
+    # SCRIPT START
+    echo "[Cloudflare DDNS] Check Initiated for <$record_name>"
+
+    # Seek for the record
+    record=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$zone_identifier/dns_records?name=$record_name" -H "X-Auth-Email: $auth_email" -H "X-Auth-Key: $auth_key" -H "Content-Type: application/json")
+
+    # Can't do anything without the record
+    if [[ $record == *"\"count\": 0"* ]] || [[ $record == *"\"count\":0"* ]]; then
+      >&2 echo -e "[Cloudflare DDNS] Record <$record_name> does not exist, perhaps create one first?"
+      continue
+    fi
+
+    # Set existing IP address from the fetched record
+    old_ip=$(echo "$record" | grep -Po '(?<="content":")[^"]*' | head -1 | xargs)
+
+    # Compare if they're the same
+    if [ $ip == $old_ip ]; then
+      echo "[Cloudflare DDNS] IP has not changed for record <$record_name>."
+      continue
+    fi
+
+    # Set the record identifier from result
+    record_identifier=$(echo "$record" | grep -Po '(?<="id":")[^"]*' | head -1 | xargs)
+
+    proxied=true
+    if [[ $record_name == $not_proxied ]]; then
+      proxied=false
+    fi
+    # The execution of update
+    update=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$zone_identifier/dns_records/$record_identifier" -H "X-Auth-Email: $auth_email" -H "X-Auth-Key: $auth_key" -H "Content-Type: application/json" --data "{\"id\":\"$zone_identifier\",\"type\":\"A\",\"proxied\":$proxied,\"name\":\"$record_name\",\"content\":\"$ip\"}")
+
+    # The moment of truth
+    case "$update" in
+    *"\"success\":false"*)
+      >&2 echo -e "[Cloudflare DDNS] Update <$record_name> failed for $record_identifier. DUMPING RESULTS:\n$update"
+      continue;;
+    *"\"success\": false"*)
+      >&2 echo -e "[Cloudflare DDNS] Update <$record_name> failed for $record_identifier. DUMPING RESULTS:\n$update"
+      continue;;
+    *)
+      echo "[Cloudflare DDNS] IPv4 context '$ip' has been synced to Cloudflare for <$record_name>.";;
+    esac
+  done
+
+  sleep $sleep_seconds;
+done
