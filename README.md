@@ -1,7 +1,7 @@
 # cloudflare-ddns-update.sh
 Cloudflare API v4 Dynamic DNS Update in Bash --> Working 20/08/2020
 
-# Based on benkulbertis/cloudflare-update-record.sh
+_Based on benkulbertis/cloudflare-update-record.sh_
 ```
 auth_email="your-email@example.com"                # The email used to login 'https://dash.cloudflare.com'
 auth_key="0000000000000000000000000000000000000"   # Top right corner, "My profile" > "Global API Key"
